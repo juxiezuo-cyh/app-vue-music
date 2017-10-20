@@ -5,8 +5,13 @@ import Vue from 'vue'
 import App from './App'
 import router from './router'
 import fastclick from 'fastclick'
-Vue.config.productionTip = false
+import ElementUI from 'element-ui'
+import 'element-ui/lib/theme-default/index.css'
+import VueLazyload from 'vue-lazyload'
 
+Vue.config.productionTip = false
+Vue.use(VueLazyload)
+Vue.use(ElementUI)
 import 'common/stylus/index.styl'
 fastclick.attach(document.body)
 /* eslint-disable no-new */
