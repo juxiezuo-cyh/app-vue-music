@@ -7,7 +7,7 @@
     </keep-alive>
     <player></player>
   </div>
-</template>
+</template> 
 
 <script type="text/ecmascript-6">
 import MHeader from 'components/m-header/m-header'
