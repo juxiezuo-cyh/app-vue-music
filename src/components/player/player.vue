@@ -84,6 +84,7 @@ export default {
     }
   },
   computed: {
+    // 唱片的旋转
     cdCls() {
       return this.playing ? 'play' : 'play pause'
     },
