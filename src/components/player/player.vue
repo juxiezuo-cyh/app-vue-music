@@ -15,7 +15,7 @@
         <div class="middle">
           <div class="middle-l">
             <div class="cd-wrapper" ref="cdWrapper">
-              <div class="cd">
+              <div class="cd" :class="cdCls">
                 <img class="image" :src="currentSong.image">
               </div>
             </div>
@@ -45,14 +45,15 @@
     <transition name="mini">
       <div @click="open" class="mini-player" v-show="!fullScreen">
         <div class="icon">
-          <img height="40" width="40">
+          <img height="40" width="40" :class="cdCls" :src="currentSong.image">
         </div>
         <div class="text">
           <h2 class="name" v-html="currentSong.name"></h2>
           <p class="desc" v-html="currentSong.singer"></p>
         </div>
         <div class="control">
-          <i :class="miniIcon" @click="togglePlaying"></i>
+          <!-- 阻止冒泡 -->
+          <i :class="miniIcon" @click.stop="togglePlaying"></i>
         </div>
         <div class="control">
           <i class="icon-playlist"></i>
@@ -83,6 +84,9 @@ export default {
     }
   },
   computed: {
+    cdCls() {
+      return this.playing ? 'play' : 'play pause'
+    },
     playIcon() {
       return this.playing ? 'icon-pause-mini' : 'icon-play-mini'
     },
