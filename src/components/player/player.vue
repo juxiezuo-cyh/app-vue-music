@@ -14,7 +14,7 @@
         </div>
         <div class="middle">
           <div class="middle-l">
-            <div class="cd-wrapper">
+            <div class="cd-wrapper" ref="cdWrapper">
               <div class="cd">
                 <img class="image" :src="currentSong.image">
               </div>
@@ -30,7 +30,7 @@
               <i class="icon-prev"></i>
             </div>
             <div class="icon i-center">
-              <i class="icon-next"></i>
+              <i class="icon-next" @click="togglePlaying" :class="playIcon"></i>
             </div>
             <div class="icon i-right">
               <i class="icon-next"></i>
@@ -51,29 +51,63 @@
           <h2 class="name" v-html="currentSong.name"></h2>
           <p class="desc" v-html="currentSong.singer"></p>
         </div>
-        <div class="control"></div>
+        <div class="control">
+          <i :class="miniIcon" @click="togglePlaying"></i>
+        </div>
         <div class="control">
           <i class="icon-playlist"></i>
         </div>
       </div>
     </transition>
+    <audio ref="audio" :src="currentSong.url"></audio>
   </div>
 </template>
 
 <script>
 import { mapGetters, mapMutations } from 'vuex'
 import animations from 'create-keyframe-animation'
+import { prefixStyle } from 'common/js/dom'
+const transform = prefixStyle('transform')
 export default {
+  watch: {
+    currentSong() {
+      this.$nextTick(() => { // 延迟相当于计数器
+        this.$refs.audio.play()
+      })
+    },
+    playing(newPlaying) {
+      const audio = this.$refs.audio
+      this.$nextTick(() => {
+        newPlaying ? audio.play() : audio.pause()
+      })
+    }
+  },
   computed: {
+    playIcon() {
+      return this.playing ? 'icon-pause-mini' : 'icon-play-mini'
+    },
+    miniIcon() {
+      return this.playing ? 'icon-pause-mini' : 'icon-play-mini'
+    },
     ...mapGetters([
       'fullScreen',
       'playlist',
-      'currentSong'
+      'currentSong',
+      'playing'
     ])
   },
   methods: {
+    togglePlaying() {
+      console.log(this.playing)
+      this.setPlayingState((!this.playing))
+      console.log(this.playing)
+    },
     enter(el, done) {
-      const { x, y, scale } = this._getPostAndScale()
+      const {
+          x,
+        y,
+        scale
+        } = this._getPostAndScale()
       let animation = {
         0: {
           transform: `translate3d(${x}px,${y}px,0) scale(${scale})`
@@ -81,19 +115,38 @@ export default {
         60: {
           transform: `translate3d(0,0,0) scale(1.1)`
         },
-        0: {
+        100: {
           transform: `translate3d(0,0,0) scale(1)`
         }
       }
+      animations.registerAnimation({
+        name: 'move',
+        animation,
+        presets: {
+          duration: 400,
+          easing: 'linear'
+        }
+      })
+      animations.runAnimation(this.$refs.cdWrapper, 'move', done)
     },
     afterEnter() {
-
+      animations.unregisterAnimation('move')
+      this.$refs.cdWrapper.style.animation = ''
     },
     leave(el, done) {
-
+      this.$refs.cdWrapper.style.transition = 'all 0.4s'
+      const {
+          x,
+        y,
+        scale
+        } = this._getPostAndScale()
+      this.$refs.cdWrapper.style[transform] =
+        `translate3d(${x}px,${y}px,0) scale(${scale})`
+      this.$refs.cdWrapper.addEventListener('transitionend', done)
     },
     afterLeave() {
-
+      this.$refs.cdWrapper.style.transition = ''
+      this.$refs.cdWrapper.style[transform] = ''
     },
     _getPostAndScale() {
       const targetWidth = 40
@@ -103,7 +156,7 @@ export default {
       const width = window.innerWidth * 0.8
       const scale = targetWidth / width
       const x = -(window.innerWidth / 2 - paddingLeft)
-      const y = window.innerHeight - paddingTop - width / 2 - paddingTop
+      const y = window.innerHeight - paddingTop - width / 2 - paddingBottom
       return {
         x,
         y,
@@ -114,7 +167,8 @@ export default {
       this.setFullScreen(false)
     },
     ...mapMutations({
-      setFullScreen: 'SET_FULL_SCREEN'
+      setFullScreen: 'SET_FULL_SCREEN',
+      setPlayingState: 'SET_PLAYING_STATE'
     }),
     open() {
       this.setFullScreen(true)
