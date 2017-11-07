@@ -26,14 +26,14 @@
             <div class="icon i-left">
               <i class="icon-sequence"></i>
             </div>
-            <div class="icon i-left">
-              <i class="icon-prev"></i>
+            <div class="icon i-left" :class="disableCls">
+              <i @click="prev" class="icon-prev"></i>
             </div>
-            <div class="icon i-center">
+            <div class="icon i-center" :class="disableCls">
               <i class="icon-next" @click="togglePlaying" :class="playIcon"></i>
             </div>
-            <div class="icon i-right">
-              <i class="icon-next"></i>
+            <div class="icon i-right" :class="disableCls">
+              <i @click="next" class="icon-next"></i>
             </div>
             <div class="icon i-right">
               <i class="icon icon-not-favorite"></i>
@@ -60,7 +60,7 @@
         </div>
       </div>
     </transition>
-    <audio ref="audio" :src="currentSong.url"></audio>
+    <audio ref="audio" :src="currentSong.url" @canplay="ready" @error="error"></audio>
   </div>
 </template>
 
@@ -70,9 +70,14 @@ import animations from 'create-keyframe-animation'
 import { prefixStyle } from 'common/js/dom'
 const transform = prefixStyle('transform')
 export default {
+  data() {
+    return {
+      songReady: false
+    }
+  },
   watch: {
     currentSong() {
-      this.$nextTick(() => { // 延迟相当于计数器
+      this.$nextTick(() => { // 延迟相当于延时器
         this.$refs.audio.play()
       })
     },
@@ -94,18 +99,57 @@ export default {
     miniIcon() {
       return this.playing ? 'icon-pause-mini' : 'icon-play-mini'
     },
+    disableCls() {
+      return this.songReady ? '' : 'disable'
+    },
     ...mapGetters([
       'fullScreen',
       'playlist',
       'currentSong',
-      'playing'
+      'playing',
+      'currentIndex'
     ])
   },
   methods: {
+    ready() {
+      this.songReady = true;
+    },
+    error() { // audio的错误函数
+      this.songReady = true;
+    },
+    prev() {
+      if (!this.songReady) {
+        return
+      }
+      let index = this.currentIndex - 1;
+      if (index === -1) {
+        index = this.playlist.length - 1;
+      }
+      this.setCurrentIndex(index)
+      if (!this.playing) {
+        this.togglePlaying()
+      }
+      this.songReady = false
+    },
+    next() {
+      if (!this.songReady) {
+        return
+      }
+      let index = this.currentIndex + 1;
+      if (index === this.playlist.length) {
+        index = 0;
+      }
+      this.setCurrentIndex(index)
+      if (!this.playing) {
+        this.togglePlaying() // 播放函数
+      }
+      this.songReady = false
+    },
     togglePlaying() {
-      console.log(this.playing)
-      this.setPlayingState((!this.playing))
-      console.log(this.playing)
+      if (!this.songReady) {
+        return
+      }
+      this.setPlayingState(!this.playing)
     },
     enter(el, done) {
       const {
@@ -172,8 +216,10 @@ export default {
       this.setFullScreen(false)
     },
     ...mapMutations({
+      // 定义方法，用来保存各个参数的状态的函数
       setFullScreen: 'SET_FULL_SCREEN',
-      setPlayingState: 'SET_PLAYING_STATE'
+      setPlayingState: 'SET_PLAYING_STATE',
+      setCurrentIndex: 'SET_CURRENT_INDEX'
     }),
     open() {
       this.setFullScreen(true)
