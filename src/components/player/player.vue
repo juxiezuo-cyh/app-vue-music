@@ -22,6 +22,11 @@
           </div>
         </div>
         <div class="bottom">
+          <div class="progress-wrapper">
+            <span class="time time-l">{{format(currentTime)}}</span>
+            <div class="progress-bar-wrapper"></div>
+            <span class="time time-r">{{format(currentSong.duration)}}</span>
+          </div>
           <div class="operators">
             <div class="icon i-left">
               <i class="icon-sequence"></i>
@@ -60,7 +65,7 @@
         </div>
       </div>
     </transition>
-    <audio ref="audio" :src="currentSong.url" @canplay="ready" @error="error"></audio>
+    <audio @timeupdate="updateTime" ref="audio" :src="currentSong.url" @canplay="ready" @error="error"></audio>
   </div>
 </template>
 
@@ -72,7 +77,8 @@ const transform = prefixStyle('transform')
 export default {
   data() {
     return {
-      songReady: false
+      songReady: false,
+      currentTime: 0
     }
   },
   watch: {
@@ -111,10 +117,28 @@ export default {
     ])
   },
   methods: {
+    format(interval) {
+      interval = interval | 0 // 相当于floor的向下取整
+      const minute = interval / 60 | 0
+      const second = this._pad(interval % 60) // 取余
+      return `${minute}:${second}`
+    },
+    _pad(num, n = 2) { // 用0 补位
+      let len = num.toString().length
+      while (len < n) {
+        num = '0' + num // 小于10的补0
+        len++
+      }
+      return num
+    },
+    updateTime(e) {
+      this.currentTime = e.target.currentTime
+    },
     ready() {
+      console.log(this.currentSong.duration)
       this.songReady = true;
     },
-    error() { // audio的错误函数
+    error() { // audio的错误函数 确保出错的时候海可以正常播放ß
       this.songReady = true;
     },
     prev() {
