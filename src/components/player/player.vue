@@ -24,7 +24,10 @@
         <div class="bottom">
           <div class="progress-wrapper">
             <span class="time time-l">{{format(currentTime)}}</span>
-            <div class="progress-bar-wrapper"></div>
+            <div class="progress-bar-wrapper">
+              <!-- 进度条 -->
+              <progress-bar :percent="percent"></progress-bar>
+            </div>
             <span class="time time-r">{{format(currentSong.duration)}}</span>
           </div>
           <div class="operators">
@@ -73,8 +76,12 @@
 import { mapGetters, mapMutations } from 'vuex'
 import animations from 'create-keyframe-animation'
 import { prefixStyle } from 'common/js/dom'
+import ProgressBar from 'base/progress-bar/progress-bar'
 const transform = prefixStyle('transform')
 export default {
+  components: {
+    ProgressBar
+  },
   data() {
     return {
       songReady: false,
@@ -95,6 +102,9 @@ export default {
     }
   },
   computed: {
+    percent() {
+      return this.currentTime / this.currentSong.duration
+    },
     // 唱片的旋转
     cdCls() {
       return this.playing ? 'play' : 'play pause'
@@ -135,7 +145,6 @@ export default {
       this.currentTime = e.target.currentTime
     },
     ready() {
-      console.log(this.currentSong.duration)
       this.songReady = true;
     },
     error() { // audio的错误函数 确保出错的时候海可以正常播放ß
