@@ -2,7 +2,10 @@
 <div class="progress-bar" ref="progressBar">
   <div class="bar-inner">
     <div class="progress" ref="progress"></div>
-    <div class="progress-btn-wrapper" ref="progressBtn">
+    <div class="progress-btn-wrapper" ref="progressBtn"
+      @touchstart.prevent="progressTouchStart"
+      @touchmove.prevent="progressTouchMove"
+      @touchend.prevent="progressTouchEnd">
       <div class="progress-btn"></div>
     </div>
   </div>
@@ -27,6 +30,22 @@ export default {
         this.$refs.progress.style.width = `${offsetWidth}px`
         this.$refs.progressBtn
       }
+    }
+  },
+  created() {
+    this.touch = {}
+  },
+  methods: {
+    progressTouchStart(e) {
+      console.log(e)
+      this.touch.initiated = true
+      this.touch.startX = e.touches[0].pageX
+    },
+    progressTouchMove(e) {
+
+    },
+    progressTouchEnd(e) {
+
     }
   }
 }
