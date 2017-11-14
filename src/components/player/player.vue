@@ -26,13 +26,13 @@
             <span class="time time-l">{{format(currentTime)}}</span>
             <div class="progress-bar-wrapper">
               <!-- 进度条 -->
-              <progress-bar :percent="percent" @percentChange="onProgressBarChange" ></progress-bar>
+              <progress-bar :percent="percent" @percentChange="onProgressBarChange"></progress-bar>
             </div>
             <span class="time time-r">{{format(currentSong.duration)}}</span>
           </div>
           <div class="operators">
             <div class="icon i-left">
-              <i class="icon-sequence"></i>
+              <i :class="iconMode" @click="changeMode"></i>
             </div>
             <div class="icon i-left" :class="disableCls">
               <i @click="prev" class="icon-prev"></i>
@@ -61,14 +61,16 @@
         </div>
         <div class="control">
           <!-- 阻止冒泡 -->
-          <i :class="miniIcon" @click.stop="togglePlaying"></i>
+          <progress-circle :radius="radius" :percent="percent">
+            <i :class="miniIcon" class="icon-mini" @click.stop="togglePlaying"></i>
+          </progress-circle>
         </div>
         <div class="control">
           <i class="icon-playlist"></i>
         </div>
       </div>
     </transition>
-    <audio @timeupdate="updateTime" ref="audio" :src="currentSong.url" @canplay="ready" @error="error"></audio>
+    <audio @ended="end" @timeupdate="updateTime" ref="audio" :src="currentSong.url" @canplay="ready" @error="error"></audio>
   </div>
 </template>
 
@@ -77,19 +79,27 @@ import { mapGetters, mapMutations } from 'vuex'
 import animations from 'create-keyframe-animation'
 import { prefixStyle } from 'common/js/dom'
 import ProgressBar from 'base/progress-bar/progress-bar'
+import ProgressCircle from 'base/progress-circle/progress-circle'
+import { playMode } from 'common/js/config'
+import { shuffle } from 'common/js/util'
 const transform = prefixStyle('transform')
 export default {
   components: {
-    ProgressBar
+    ProgressBar,
+    ProgressCircle
   },
   data() {
     return {
       songReady: false,
-      currentTime: 0
+      currentTime: 0,
+      radius: 32
     }
   },
   watch: {
-    currentSong() {
+    currentSong(newSong, oldSong) {
+      if (newSong === oldSong) { // 相同歌曲不播放，在模式切换的时候
+        return
+      }
       this.$nextTick(() => { // 延迟相当于延时器
         this.$refs.audio.play()
       })
@@ -102,6 +112,9 @@ export default {
     }
   },
   computed: {
+    iconMode() {
+      return this.mode === playMode.sequence ? 'icon-sequence' : this.mode === playMode.loop ? 'icon-loop' : 'icon-random'
+    },
     percent() {
       return this.currentTime / this.currentSong.duration
     },
@@ -123,10 +136,41 @@ export default {
       'playlist',
       'currentSong',
       'playing',
-      'currentIndex'
+      'currentIndex',
+      'mode',
+      'sequenceList'
     ])
   },
   methods: {
+    loop() { // 单曲循环
+      this.$refs.audio.currentTime = 0
+      this.$refs.audio.play()
+    },
+    end() {
+      if (this.mode === playMode.loop) {
+        this.loop()
+      } else {
+        this.next()
+      }
+    },
+    changeMode() {
+      const mode = (this.mode + 1) % 3 // 对3取余也就是0,1,2 三种播放状态
+      this.setPlayMode(mode)
+      let list = []
+      if (mode === playMode.random) { // 随机播放
+        list = shuffle(this.sequenceList) // 打乱数组，变成随机播放的列表
+      } else {
+        list = this.sequenceList // 顺序播放
+      }
+      this._resetCurrentIndex(list)
+      this.setPlayList(list)
+    },
+    _resetCurrentIndex(list) {
+      let index = list.findIndex((item) => {
+        return item.id === this.currentSong.id
+      })
+      this.setCurrentIndex(index)
+    },
     onProgressBarChange(percent) {
       this.$refs.audio.currentTime = percent * this.currentSong.duration
       if (!this.playing) {
@@ -223,11 +267,7 @@ export default {
     },
     leave(el, done) {
       this.$refs.cdWrapper.style.transition = 'all 0.4s'
-      const {
-          x,
-        y,
-        scale
-        } = this._getPostAndScale()
+      const { x, y, scale } = this._getPostAndScale()
       this.$refs.cdWrapper.style[transform] =
         `translate3d(${x}px,${y}px,0) scale(${scale})`
       this.$refs.cdWrapper.addEventListener('transitionend', done)
@@ -258,7 +298,9 @@ export default {
       // 定义方法，用来保存各个参数的状态的函数
       setFullScreen: 'SET_FULL_SCREEN',
       setPlayingState: 'SET_PLAYING_STATE',
-      setCurrentIndex: 'SET_CURRENT_INDEX'
+      setCurrentIndex: 'SET_CURRENT_INDEX',
+      setPlayMode: 'SET_PLAY_MODE',
+      setPlayList: 'SET_PLAYLIST'
     }),
     open() {
       this.setFullScreen(true)

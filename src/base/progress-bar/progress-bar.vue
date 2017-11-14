@@ -21,7 +21,7 @@
     },
     watch: {
       percent(newPercent) {
-        if (newPercent >= 0 && this.touch.initiated === false) {
+        if (newPercent >= 0 && (this.touch.initiated === false)) {
           const barWidth = this.$refs.progressBar.clientWidth - progressBtnWidth
           const offsetWidth = newPercent * barWidth
           this._offset(offsetWidth)
@@ -33,7 +33,13 @@
     },
     methods: {
       progressClick(e) {
-        this._offset(e.offsetX)
+        // 点击进度条的时候，e.offsetX 不对
+        // getBoundingClientRect() 获取一个元素相对于浏览器的上下左右的位置
+        const rect = this.$refs.progressBar.getBoundingClientRect()
+        const offsetWidth = e.pageX - rect.left
+        // 初始化进度条
+        this.touch.initiated = false
+        this._offset(offsetWidth)
         this._triggerPercent()
       },
       _offset(offsetWidth) {
