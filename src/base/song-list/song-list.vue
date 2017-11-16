@@ -1,10 +1,12 @@
 <template>
+  <!-- 歌曲的列表 -->
   <div class="song-list">
     <ul>
       <li
         @click="selectItem(item, index)"
         class="item"
-        v-for="(item, index) in songs">
+        v-for="(item, index) in songs"
+      >
         <div class="content">
           <h2 class="name">{{item.name}}</h2>
           <p class="desc">{{getDesc(item)}}</p>

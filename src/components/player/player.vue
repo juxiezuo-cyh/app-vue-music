@@ -1,4 +1,5 @@
 <template>
+  <!-- 播放器页 -->
   <div class="player" v-show="playlist.length">
     <transition name="normal" @enter="enter" @after-enter="afterEnter" @leave="leave" @after-leave="afterLeave">
       <div class="normal-player" v-show="fullScreen">

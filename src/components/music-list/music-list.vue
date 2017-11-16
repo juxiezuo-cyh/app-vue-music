@@ -1,4 +1,5 @@
 <template>
+  <!-- 各个歌手的歌曲页面-->
   <div class="music-list">
     <div class="back" @click="back">
       <i class="icon-back"></i>

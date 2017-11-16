@@ -31,6 +31,7 @@ export default {
     }),
     selectSinger(singer) {
       this.$router.push({
+        // 路由传递参数
         path: `/singer/${singer.id}`
       })
       this.setSinger(singer)

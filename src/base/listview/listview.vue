@@ -1,11 +1,12 @@
 <template>
+  <!-- 歌手列表页 -->
   <Scroll :proType="proType" class="listview" :data="data" ref="listview" :listenScroll="listenScroll" @scroll="scroll">
     <ul>
       <li v-for="group in data" class="list-group" ref="listGroup">
         <h2 class="list-group-title">{{group.title}}</h2>
         <ul>
           <li @click="selectItem(item)" v-for="item in group.items" class="list-group-item">
-            <img class="avatar" v-lazy="item.avatar">
+             <img class="avatar" v-lazy="item.avatar">
             <span class="name">{{item.name}}</span>
           </li>
         </ul>
@@ -13,6 +14,7 @@
     </ul>
     <div class="list-shortcut" @touchstart="onShortcutTouchStart" @touchmove.stop.prevent="onShortcutTouchMove">
       <ul>
+        <!-- 右侧边栏 热门字母等 -->
         <li v-for="(item, index) in shortcutList" class="item" :data-index="index" :class="{'current':currentIndex === index}">
           {{item}}
         </li>
