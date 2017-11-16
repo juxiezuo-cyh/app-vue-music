@@ -103,6 +103,7 @@ export default {
       }
       this.$nextTick(() => { // 延迟相当于延时器
         this.$refs.audio.play()
+        this.currentSong.getLyric()
       })
     },
     playing(newPlaying) {
