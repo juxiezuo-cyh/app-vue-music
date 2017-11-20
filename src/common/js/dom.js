@@ -25,7 +25,7 @@ export function getData(el, name, val) {
 let elementStyle = document.createElement("div").style;
 let vendor = (() => {
   let transformNames = {
-    webkit: "webkitTransform",
+    webkit: "webkit-transform",
     Moz: "MozTransform",
     O: "OTransform",
     ms: "msTransform",

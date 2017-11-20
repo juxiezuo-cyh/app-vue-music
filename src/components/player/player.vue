@@ -13,7 +13,10 @@
           <h1 class="title" v-html="currentSong.name"></h1>
           <h2 class="subtitle" v-html="currentSong.singer"></h2>
         </div>
-        <div class="middle">
+        <div class="middle"
+          @touchstart.prevent="middleTouchStart"
+          @touchmove.prevent="middleTouchMove"
+          @touchend.prevent="middleTouchEnd">
           <div class="middle-l">
             <div class="cd-wrapper" ref="cdWrapper">
               <div class="cd" :class="cdCls">
@@ -21,8 +24,20 @@
               </div>
             </div>
           </div>
+          <!-- 歌词 -->
+          <Scroll class="middle-r" ref="lyricList" :data="currentLyric && currentLyric.lines">
+            <div class="lyric-wrapper">
+              <div v-if="currentLyric">
+                <p ref="lyricLine" :class="{'current' : currentLineNum === index}" class="text" v-for="(line, index) in currentLyric.lines">{{line.txt}}</p>
+              </div>
+            </div>
+          </Scroll>
         </div>
         <div class="bottom">
+          <div class="dot-wrapper">
+            <span class="dot" :class="{'active' : currentShow === 'cd'}"></span>
+            <span class="dot" :class="{'active' : currentShow === 'lyric-parser'}"></span>
+          </div>
           <div class="progress-wrapper">
             <span class="time time-l">{{format(currentTime)}}</span>
             <div class="progress-bar-wrapper">
@@ -83,17 +98,23 @@ import ProgressBar from 'base/progress-bar/progress-bar'
 import ProgressCircle from 'base/progress-circle/progress-circle'
 import { playMode } from 'common/js/config'
 import { shuffle } from 'common/js/util'
+import Lyric from 'lyric-parser'
+import Scroll from 'base/scroll/scroll'
 const transform = prefixStyle('transform')
 export default {
   components: {
     ProgressBar,
-    ProgressCircle
+    ProgressCircle,
+    Scroll
   },
   data() {
     return {
       songReady: false,
       currentTime: 0,
-      radius: 32
+      radius: 32,
+      currentLyric: null,
+      currentLineNum: 0,
+      currentShow: 'cd'
     }
   },
   watch: {
@@ -103,7 +124,7 @@ export default {
       }
       this.$nextTick(() => { // 延迟相当于延时器
         this.$refs.audio.play()
-        this.currentSong.getLyric()
+        this.getLyric()
       })
     },
     playing(newPlaying) {
@@ -143,7 +164,54 @@ export default {
       'sequenceList'
     ])
   },
+  created() {
+    // 不需要添加get和set所以写在created里面
+    this.touch = {}
+  },
   methods: {
+    // 滑动屏幕进行cd和歌词的切换
+    middleTouchStart(e) {
+      this.touch.initiated = true
+      const touch = e.touches[0]
+      this.touch.startX = touch.pageX
+      this.touch.startY = touch.pageY
+    },
+    middleTouchMove(e) {
+      if (!this.touch.initiated) {
+        return
+      }
+      const touch = e.touches[0]
+      const deltaX = touch.pageX - this.touch.startX
+      const deltaY = touch.pageY - this.touch.startY
+      if (Math.abs(deltaY) > Math.abs(deltaX)) {
+        // 纵向的移动偏差大于横向的，说明是上下滑动，
+        return
+      }
+      // 如果是cd状态的话，这个left的div就停留距离左边的位置是0.，不然的话就是屏幕的宽度
+      let left = this.currentShow === 'cd' ? 0 : -window.innerWidth
+      const width = Math.min(0, Math.max(-window.innerWidth, left + deltaX))
+      this.$refs.lyricList.style[transform] = `translate3d(${width}px,0,0)`
+    },
+    middleTouchEnd(e) {
+
+    },
+    getLyric() {
+      this.currentSong.getLyric().then((lyric) => {
+        this.currentLyric = new Lyric(lyric, this.handleLyric)
+        if (this.playing) {
+          this.currentLyric.play()
+        }
+      })
+    },
+    handleLyric(lineNum, txt) {
+      this.currentLineNum = lineNum.lineNum
+      if (lineNum.lineNum > 5) {
+        let lineEl = this.$refs.lyricLine[lineNum.lineNum - 5]
+        this.$refs.lyricList.ScrollToElement(lineEl, 1000)
+      } else {
+        this.$refs.lyricList.ScrollTo(0, 0, 1000)
+      }
+    },
     loop() { // 单曲循环
       this.$refs.audio.currentTime = 0
       this.$refs.audio.play()
