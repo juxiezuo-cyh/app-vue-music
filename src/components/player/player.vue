@@ -13,11 +13,8 @@
           <h1 class="title" v-html="currentSong.name"></h1>
           <h2 class="subtitle" v-html="currentSong.singer"></h2>
         </div>
-        <div class="middle"
-          @touchstart.prevent="middleTouchStart"
-          @touchmove.prevent="middleTouchMove"
-          @touchend.prevent="middleTouchEnd">
-          <div class="middle-l">
+        <div class="middle" @touchstart.prevent="middleTouchStart" @touchmove.prevent="middleTouchMove" @touchend.prevent="middleTouchEnd">
+          <div class="middle-l" ref="middleL">
             <div class="cd-wrapper" ref="cdWrapper">
               <div class="cd" :class="cdCls">
                 <img class="image" :src="currentSong.image">
@@ -36,7 +33,7 @@
         <div class="bottom">
           <div class="dot-wrapper">
             <span class="dot" :class="{'active' : currentShow === 'cd'}"></span>
-            <span class="dot" :class="{'active' : currentShow === 'lyric-parser'}"></span>
+            <span class="dot" :class="{'active' : currentShow === 'lyric'}"></span>
           </div>
           <div class="progress-wrapper">
             <span class="time time-l">{{format(currentTime)}}</span>
@@ -101,6 +98,7 @@ import { shuffle } from 'common/js/util'
 import Lyric from 'lyric-parser'
 import Scroll from 'base/scroll/scroll'
 const transform = prefixStyle('transform')
+const transitionDuration = prefixStyle('transitionDuration')
 export default {
   components: {
     ProgressBar,
@@ -121,6 +119,10 @@ export default {
     currentSong(newSong, oldSong) {
       if (newSong === oldSong) { // 相同歌曲不播放，在模式切换的时候
         return
+      }
+      if (this.currentLyric) {
+        // 清理歌词的计时器
+        this.currentLyric.stop()
       }
       this.$nextTick(() => { // 延迟相当于延时器
         this.$refs.audio.play()
@@ -188,12 +190,44 @@ export default {
         return
       }
       // 如果是cd状态的话，这个left的div就停留距离左边的位置是0.，不然的话就是屏幕的宽度
-      let left = this.currentShow === 'cd' ? 0 : -window.innerWidth
-      const width = Math.min(0, Math.max(-window.innerWidth, left + deltaX))
-      this.$refs.lyricList.style[transform] = `translate3d(${width}px,0,0)`
+      const left = this.currentShow === 'cd' ? 0 : -window.innerWidth
+      const offsetWidth =
+        Math.min(0, Math.max(-window.innerWidth, left + deltaX))
+      this.touch.percent = Math.abs(offsetWidth / window.innerWidth)
+      this.$refs.lyricList.$el.style[transform] =
+        `translate3d(${offsetWidth}px,0,0)`
+      this.$refs.lyricList.$el.style[transitionDuration] = 0
+      this.$refs.middleL.style.opacity = 1 - this.touch.percent
+      this.$refs.middleL.style[transitionDuration] = 0
     },
     middleTouchEnd(e) {
-
+      let offsetWidth, opacity
+      if (this.currentShow === 'cd') {
+        if (this.touch.percent > 0.1) {
+          opacity = 0
+          offsetWidth = -window.innerWidth
+          this.currentShow = 'lyric'
+        } else {
+          opacity = 1
+          offsetWidth = 0
+        }
+      } else {
+        if (this.touch.percent < 0.9) {
+          offsetWidth = 0
+          this.currentShow = 'cd'
+          opacity = 1
+        } else {
+          offsetWidth = -window.innerWidth
+          opacity = 0
+        }
+      }
+      // 动画时间
+      const time = 300
+      this.$refs.lyricList.$el.style[transform] =
+        `translate3d(${offsetWidth}px,0,0)`
+      this.$refs.lyricList.$el.style[transitionDuration] = `${time}ms`
+      this.$refs.middleL.style.opacity = opacity
+      this.$refs.middleL.style[transitionDuration] = `${time}ms`
     },
     getLyric() {
       this.currentSong.getLyric().then((lyric) => {
@@ -207,14 +241,17 @@ export default {
       this.currentLineNum = lineNum.lineNum
       if (lineNum.lineNum > 5) {
         let lineEl = this.$refs.lyricLine[lineNum.lineNum - 5]
-        this.$refs.lyricList.ScrollToElement(lineEl, 1000)
-      } else {
-        this.$refs.lyricList.ScrollTo(0, 0, 1000)
+        this.$refs.lyricList.scrollToElement(lineEl, 1000)
+      } else { // js方法
+        this.$refs.lyricList.scrollTo(0, 0, 1000)
       }
     },
     loop() { // 单曲循环
       this.$refs.audio.currentTime = 0
       this.$refs.audio.play()
+      if (this.currentLyric) {
+        this.currentLyric.seek(0)
+      }
     },
     end() {
       if (this.mode === playMode.loop) {
@@ -242,9 +279,13 @@ export default {
       this.setCurrentIndex(index)
     },
     onProgressBarChange(percent) {
-      this.$refs.audio.currentTime = percent * this.currentSong.duration
+      const currentTime = percent * this.currentSong.duration
+      this.$refs.audio.currentTime = currentTime
       if (!this.playing) {
         this.togglePlaying()
+      }
+      if (this.currentLyric) {
+        this.currentLyric.seek(currentTime * 1000)
       }
     },
     format(interval) {
@@ -303,6 +344,9 @@ export default {
         return
       }
       this.setPlayingState(!this.playing)
+      if (this.currentLyric) {
+        this.currentLyric.togglePlay()
+      }
     },
     enter(el, done) {
       const {
