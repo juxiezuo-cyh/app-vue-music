@@ -20,6 +20,9 @@
                 <img class="image" :src="currentSong.image">
               </div>
             </div>
+            <div class="playing-lyric-wrapper">
+              <div class="playing-lyric">{{playingLyric}}</div>
+            </div>
           </div>
           <!-- 歌词 -->
           <Scroll class="middle-r" ref="lyricList" :data="currentLyric && currentLyric.lines">
@@ -88,339 +91,371 @@
 </template>
 
 <script>
-import { mapGetters, mapMutations } from 'vuex'
-import animations from 'create-keyframe-animation'
-import { prefixStyle } from 'common/js/dom'
-import ProgressBar from 'base/progress-bar/progress-bar'
-import ProgressCircle from 'base/progress-circle/progress-circle'
-import { playMode } from 'common/js/config'
-import { shuffle } from 'common/js/util'
-import Lyric from 'lyric-parser'
-import Scroll from 'base/scroll/scroll'
-const transform = prefixStyle('transform')
-const transitionDuration = prefixStyle('transitionDuration')
-export default {
-  components: {
-    ProgressBar,
-    ProgressCircle,
-    Scroll
-  },
-  data() {
-    return {
-      songReady: false,
-      currentTime: 0,
-      radius: 32,
-      currentLyric: null,
-      currentLineNum: 0,
-      currentShow: 'cd'
-    }
-  },
-  watch: {
-    currentSong(newSong, oldSong) {
-      if (newSong === oldSong) { // 相同歌曲不播放，在模式切换的时候
-        return
-      }
-      if (this.currentLyric) {
-        // 清理歌词的计时器
-        this.currentLyric.stop()
-      }
-      this.$nextTick(() => { // 延迟相当于延时器
-        this.$refs.audio.play()
-        this.getLyric()
-      })
+  import {
+    mapGetters,
+    mapMutations
+  } from 'vuex'
+  import animations from 'create-keyframe-animation'
+  import {
+    prefixStyle
+  } from 'common/js/dom'
+  import ProgressBar from 'base/progress-bar/progress-bar'
+  import ProgressCircle from 'base/progress-circle/progress-circle'
+  import {
+    playMode
+  } from 'common/js/config'
+  import {
+    shuffle
+  } from 'common/js/util'
+  import Lyric from 'lyric-parser'
+  import Scroll from 'base/scroll/scroll'
+  const transform = prefixStyle('transform')
+  const transitionDuration = prefixStyle('transitionDuration')
+  export default {
+    components: {
+      ProgressBar,
+      ProgressCircle,
+      Scroll
     },
-    playing(newPlaying) {
-      const audio = this.$refs.audio
-      this.$nextTick(() => {
-        newPlaying ? audio.play() : audio.pause()
-      })
-    }
-  },
-  computed: {
-    iconMode() {
-      return this.mode === playMode.sequence ? 'icon-sequence' : this.mode === playMode.loop ? 'icon-loop' : 'icon-random'
-    },
-    percent() {
-      return this.currentTime / this.currentSong.duration
-    },
-    // 唱片的旋转
-    cdCls() {
-      return this.playing ? 'play' : 'play pause'
-    },
-    playIcon() {
-      return this.playing ? 'icon-pause-mini' : 'icon-play-mini'
-    },
-    miniIcon() {
-      return this.playing ? 'icon-pause-mini' : 'icon-play-mini'
-    },
-    disableCls() {
-      return this.songReady ? '' : 'disable'
-    },
-    ...mapGetters([
-      'fullScreen',
-      'playlist',
-      'currentSong',
-      'playing',
-      'currentIndex',
-      'mode',
-      'sequenceList'
-    ])
-  },
-  created() {
-    // 不需要添加get和set所以写在created里面
-    this.touch = {}
-  },
-  methods: {
-    // 滑动屏幕进行cd和歌词的切换
-    middleTouchStart(e) {
-      this.touch.initiated = true
-      const touch = e.touches[0]
-      this.touch.startX = touch.pageX
-      this.touch.startY = touch.pageY
-    },
-    middleTouchMove(e) {
-      if (!this.touch.initiated) {
-        return
-      }
-      const touch = e.touches[0]
-      const deltaX = touch.pageX - this.touch.startX
-      const deltaY = touch.pageY - this.touch.startY
-      if (Math.abs(deltaY) > Math.abs(deltaX)) {
-        // 纵向的移动偏差大于横向的，说明是上下滑动，
-        return
-      }
-      // 如果是cd状态的话，这个left的div就停留距离左边的位置是0.，不然的话就是屏幕的宽度
-      const left = this.currentShow === 'cd' ? 0 : -window.innerWidth
-      const offsetWidth =
-        Math.min(0, Math.max(-window.innerWidth, left + deltaX))
-      this.touch.percent = Math.abs(offsetWidth / window.innerWidth)
-      this.$refs.lyricList.$el.style[transform] =
-        `translate3d(${offsetWidth}px,0,0)`
-      this.$refs.lyricList.$el.style[transitionDuration] = 0
-      this.$refs.middleL.style.opacity = 1 - this.touch.percent
-      this.$refs.middleL.style[transitionDuration] = 0
-    },
-    middleTouchEnd(e) {
-      let offsetWidth, opacity
-      if (this.currentShow === 'cd') {
-        if (this.touch.percent > 0.1) {
-          opacity = 0
-          offsetWidth = -window.innerWidth
-          this.currentShow = 'lyric'
-        } else {
-          opacity = 1
-          offsetWidth = 0
-        }
-      } else {
-        if (this.touch.percent < 0.9) {
-          offsetWidth = 0
-          this.currentShow = 'cd'
-          opacity = 1
-        } else {
-          offsetWidth = -window.innerWidth
-          opacity = 0
-        }
-      }
-      // 动画时间
-      const time = 300
-      this.$refs.lyricList.$el.style[transform] =
-        `translate3d(${offsetWidth}px,0,0)`
-      this.$refs.lyricList.$el.style[transitionDuration] = `${time}ms`
-      this.$refs.middleL.style.opacity = opacity
-      this.$refs.middleL.style[transitionDuration] = `${time}ms`
-    },
-    getLyric() {
-      this.currentSong.getLyric().then((lyric) => {
-        this.currentLyric = new Lyric(lyric, this.handleLyric)
-        if (this.playing) {
-          this.currentLyric.play()
-        }
-      })
-    },
-    handleLyric(lineNum, txt) {
-      this.currentLineNum = lineNum.lineNum
-      if (lineNum.lineNum > 5) {
-        let lineEl = this.$refs.lyricLine[lineNum.lineNum - 5]
-        this.$refs.lyricList.scrollToElement(lineEl, 1000)
-      } else { // js方法
-        this.$refs.lyricList.scrollTo(0, 0, 1000)
-      }
-    },
-    loop() { // 单曲循环
-      this.$refs.audio.currentTime = 0
-      this.$refs.audio.play()
-      if (this.currentLyric) {
-        this.currentLyric.seek(0)
-      }
-    },
-    end() {
-      if (this.mode === playMode.loop) {
-        this.loop()
-      } else {
-        this.next()
-      }
-    },
-    changeMode() {
-      const mode = (this.mode + 1) % 3 // 对3取余也就是0,1,2 三种播放状态
-      this.setPlayMode(mode)
-      let list = []
-      if (mode === playMode.random) { // 随机播放
-        list = shuffle(this.sequenceList) // 打乱数组，变成随机播放的列表
-      } else {
-        list = this.sequenceList // 顺序播放
-      }
-      this._resetCurrentIndex(list)
-      this.setPlayList(list)
-    },
-    _resetCurrentIndex(list) {
-      let index = list.findIndex((item) => {
-        return item.id === this.currentSong.id
-      })
-      this.setCurrentIndex(index)
-    },
-    onProgressBarChange(percent) {
-      const currentTime = percent * this.currentSong.duration
-      this.$refs.audio.currentTime = currentTime
-      if (!this.playing) {
-        this.togglePlaying()
-      }
-      if (this.currentLyric) {
-        this.currentLyric.seek(currentTime * 1000)
-      }
-    },
-    format(interval) {
-      interval = interval | 0 // 相当于floor的向下取整
-      const minute = interval / 60 | 0
-      const second = this._pad(interval % 60) // 取余
-      return `${minute}:${second}`
-    },
-    _pad(num, n = 2) { // 用0 补位
-      let len = num.toString().length
-      while (len < n) {
-        num = '0' + num // 小于10的补0
-        len++
-      }
-      return num
-    },
-    updateTime(e) {
-      this.currentTime = e.target.currentTime
-    },
-    ready() {
-      this.songReady = true;
-    },
-    error() { // audio的错误函数 确保出错的时候海可以正常播放ß
-      this.songReady = true;
-    },
-    prev() {
-      if (!this.songReady) {
-        return
-      }
-      let index = this.currentIndex - 1;
-      if (index === -1) {
-        index = this.playlist.length - 1;
-      }
-      this.setCurrentIndex(index)
-      if (!this.playing) {
-        this.togglePlaying()
-      }
-      this.songReady = false
-    },
-    next() {
-      if (!this.songReady) {
-        return
-      }
-      let index = this.currentIndex + 1;
-      if (index === this.playlist.length) {
-        index = 0;
-      }
-      this.setCurrentIndex(index)
-      if (!this.playing) {
-        this.togglePlaying() // 播放函数
-      }
-      this.songReady = false
-    },
-    togglePlaying() {
-      if (!this.songReady) {
-        return
-      }
-      this.setPlayingState(!this.playing)
-      if (this.currentLyric) {
-        this.currentLyric.togglePlay()
-      }
-    },
-    enter(el, done) {
-      const {
-          x,
-        y,
-        scale
-        } = this._getPostAndScale()
-      let animation = {
-        0: {
-          transform: `translate3d(${x}px,${y}px,0) scale(${scale})`
-        },
-        60: {
-          transform: `translate3d(0,0,0) scale(1.1)`
-        },
-        100: {
-          transform: `translate3d(0,0,0) scale(1)`
-        }
-      }
-      animations.registerAnimation({
-        name: 'move',
-        animation,
-        presets: {
-          duration: 400,
-          easing: 'linear'
-        }
-      })
-      animations.runAnimation(this.$refs.cdWrapper, 'move', done)
-    },
-    afterEnter() {
-      animations.unregisterAnimation('move')
-      this.$refs.cdWrapper.style.animation = ''
-    },
-    leave(el, done) {
-      this.$refs.cdWrapper.style.transition = 'all 0.4s'
-      const { x, y, scale } = this._getPostAndScale()
-      this.$refs.cdWrapper.style[transform] =
-        `translate3d(${x}px,${y}px,0) scale(${scale})`
-      this.$refs.cdWrapper.addEventListener('transitionend', done)
-    },
-    afterLeave() {
-      this.$refs.cdWrapper.style.transition = ''
-      this.$refs.cdWrapper.style[transform] = ''
-    },
-    _getPostAndScale() {
-      const targetWidth = 40
-      const paddingLeft = 40
-      const paddingBottom = 30
-      const paddingTop = 80
-      const width = window.innerWidth * 0.8
-      const scale = targetWidth / width
-      const x = -(window.innerWidth / 2 - paddingLeft)
-      const y = window.innerHeight - paddingTop - width / 2 - paddingBottom
+    data() {
       return {
-        x,
-        y,
-        scale
+        songReady: false,
+        currentTime: 0,
+        radius: 32,
+        currentLyric: null,
+        currentLineNum: 0,
+        currentShow: 'cd',
+        playingLyric: ''
       }
     },
-    back() {
-      this.setFullScreen(false)
+    watch: {
+      currentSong(newSong, oldSong) {
+        if (newSong === oldSong) { // 相同歌曲不播放，在模式切换的时候
+          return
+        }
+        if (this.currentLyric) {
+          // 清理歌词的计时器
+          this.currentLyric.stop()
+        }
+        setTimeout(() => { // 延迟相当于延时器
+          this.$refs.audio.play()
+          this.getLyric()
+        }, 1000)
+      },
+      playing(newPlaying) {
+        const audio = this.$refs.audio
+        this.$nextTick(() => {
+          newPlaying ? audio.play() : audio.pause()
+        })
+      }
     },
-    ...mapMutations({
-      // 定义方法，用来保存各个参数的状态的函数
-      setFullScreen: 'SET_FULL_SCREEN',
-      setPlayingState: 'SET_PLAYING_STATE',
-      setCurrentIndex: 'SET_CURRENT_INDEX',
-      setPlayMode: 'SET_PLAY_MODE',
-      setPlayList: 'SET_PLAYLIST'
-    }),
-    open() {
-      this.setFullScreen(true)
+    computed: {
+      iconMode() {
+        return this.mode === playMode.sequence ? 'icon-sequence' : this.mode === playMode.loop ? 'icon-loop' : 'icon-random'
+      },
+      percent() {
+        return this.currentTime / this.currentSong.duration
+      },
+      // 唱片的旋转
+      cdCls() {
+        return this.playing ? 'play' : 'play pause'
+      },
+      playIcon() {
+        return this.playing ? 'icon-pause-mini' : 'icon-play-mini'
+      },
+      miniIcon() {
+        return this.playing ? 'icon-pause-mini' : 'icon-play-mini'
+      },
+      disableCls() {
+        return this.songReady ? '' : 'disable'
+      },
+      ...mapGetters([
+        'fullScreen',
+        'playlist',
+        'currentSong',
+        'playing',
+        'currentIndex',
+        'mode',
+        'sequenceList'
+      ])
+    },
+    created() {
+      // 不需要添加get和set所以写在created里面
+      this.touch = {}
+    },
+    methods: {
+      // 滑动屏幕进行cd和歌词的切换
+      middleTouchStart(e) {
+        this.touch.initiated = true
+        const touch = e.touches[0]
+        this.touch.startX = touch.pageX
+        this.touch.startY = touch.pageY
+      },
+      middleTouchMove(e) {
+        if (!this.touch.initiated) {
+          return
+        }
+        const touch = e.touches[0]
+        const deltaX = touch.pageX - this.touch.startX
+        const deltaY = touch.pageY - this.touch.startY
+        if (Math.abs(deltaY) > Math.abs(deltaX)) {
+          // 纵向的移动偏差大于横向的，说明是上下滑动，
+          return
+        }
+        // 如果是cd状态的话，这个left的div就停留距离左边的位置是0.，不然的话就是屏幕的宽度
+        const left = this.currentShow === 'cd' ? 0 : -window.innerWidth
+        const offsetWidth =
+          Math.min(0, Math.max(-window.innerWidth, left + deltaX))
+        this.touch.percent = Math.abs(offsetWidth / window.innerWidth)
+        this.$refs.lyricList.$el.style[transform] =
+          `translate3d(${offsetWidth}px,0,0)`
+        this.$refs.lyricList.$el.style[transitionDuration] = 0
+        this.$refs.middleL.style.opacity = 1 - this.touch.percent
+        this.$refs.middleL.style[transitionDuration] = 0
+      },
+      middleTouchEnd(e) {
+        let offsetWidth, opacity
+        if (this.currentShow === 'cd') {
+          if (this.touch.percent > 0.1) {
+            opacity = 0
+            offsetWidth = -window.innerWidth
+            this.currentShow = 'lyric'
+          } else {
+            opacity = 1
+            offsetWidth = 0
+          }
+        } else {
+          if (this.touch.percent < 0.9) {
+            offsetWidth = 0
+            this.currentShow = 'cd'
+            opacity = 1
+          } else {
+            offsetWidth = -window.innerWidth
+            opacity = 0
+          }
+        }
+        // 动画时间
+        const time = 300
+        this.$refs.lyricList.$el.style[transform] =
+          `translate3d(${offsetWidth}px,0,0)`
+        this.$refs.lyricList.$el.style[transitionDuration] = `${time}ms`
+        this.$refs.middleL.style.opacity = opacity
+        this.$refs.middleL.style[transitionDuration] = `${time}ms`
+      },
+      getLyric() {
+        this.currentSong.getLyric().then((lyric) => {
+          this.currentLyric = new Lyric(lyric, this.handleLyric)
+          if (this.playing) {
+            this.currentLyric.play()
+          }
+        }).catch(() => {
+          // 失败
+          this.currentLyric = null
+          this.playingLyric = ''
+          this.currentLineNum = 0
+        })
+      },
+      handleLyric({
+        lineNum,
+        txt
+      }) {
+        // txt 为当前播放歌词
+        this.currentLineNum = lineNum
+        if (lineNum > 5) {
+          let lineEl = this.$refs.lyricLine[lineNum - 5]
+          this.$refs.lyricList.scrollToElement(lineEl, 1000)
+        } else { // js方法
+          this.$refs.lyricList.scrollTo(0, 0, 1000)
+        }
+        this.playingLyric = txt;
+      },
+      loop() { // 单曲循环
+        this.$refs.audio.currentTime = 0
+        this.$refs.audio.play()
+        if (this.currentLyric) {
+          this.currentLyric.seek(0)
+        }
+      },
+      end() {
+        if (this.mode === playMode.loop) {
+          this.loop()
+        } else {
+          this.next()
+        }
+      },
+      changeMode() {
+        const mode = (this.mode + 1) % 3 // 对3取余也就是0,1,2 三种播放状态
+        this.setPlayMode(mode)
+        let list = []
+        if (mode === playMode.random) { // 随机播放
+          list = shuffle(this.sequenceList) // 打乱数组，变成随机播放的列表
+        } else {
+          list = this.sequenceList // 顺序播放
+        }
+        this._resetCurrentIndex(list)
+        this.setPlayList(list)
+      },
+      _resetCurrentIndex(list) {
+        let index = list.findIndex((item) => {
+          return item.id === this.currentSong.id
+        })
+        this.setCurrentIndex(index)
+      },
+      onProgressBarChange(percent) {
+        const currentTime = percent * this.currentSong.duration
+        this.$refs.audio.currentTime = currentTime
+        if (!this.playing) {
+          this.togglePlaying()
+        }
+        if (this.currentLyric) {
+          this.currentLyric.seek(currentTime * 1000)
+        }
+      },
+      format(interval) {
+        interval = interval | 0 // 相当于floor的向下取整
+        const minute = interval / 60 | 0
+        const second = this._pad(interval % 60) // 取余
+        return `${minute}:${second}`
+      },
+      _pad(num, n = 2) { // 用0 补位
+        let len = num.toString().length
+        while (len < n) {
+          num = '0' + num // 小于10的补0
+          len++
+        }
+        return num
+      },
+      updateTime(e) {
+        this.currentTime = e.target.currentTime
+      },
+      ready() {
+        this.songReady = true;
+      },
+      error() { // audio的错误函数 确保出错的时候海可以正常播放ß
+        this.songReady = true;
+      },
+      prev() {
+        if (!this.songReady) {
+          return
+        }
+        if (this.playlist.lenght === 1) {
+          this.loop()
+        } else {
+          let index = this.currentIndex - 1;
+          if (index === -1) {
+            index = this.playlist.length - 1;
+          }
+          this.setCurrentIndex(index)
+          if (!this.playing) {
+            this.togglePlaying()
+          }
+        }
+        this.songReady = false
+      },
+      next() {
+        if (!this.songReady) {
+          return
+        }
+        if (this.playlist.length === 1) {
+          this.loop()
+        } else {
+          let index = this.currentIndex + 1
+          if (index === this.playlist.length) {
+            index = 0
+          }
+          this.setCurrentIndex(index)
+          if (!this.playing) {
+            this.togglePlaying() // 播放函数
+          }
+        }
+        this.songReady = false
+      },
+      togglePlaying() {
+        if (!this.songReady) {
+          return
+        }
+        this.setPlayingState(!this.playing)
+        if (this.currentLyric) {
+          this.currentLyric.togglePlay()
+        }
+      },
+      enter(el, done) {
+        const {
+          x,
+          y,
+          scale
+        } = this._getPostAndScale()
+        let animation = {
+          0: {
+            transform: `translate3d(${x}px,${y}px,0) scale(${scale})`
+          },
+          60: {
+            transform: `translate3d(0,0,0) scale(1.1)`
+          },
+          100: {
+            transform: `translate3d(0,0,0) scale(1)`
+          }
+        }
+        animations.registerAnimation({
+          name: 'move',
+          animation,
+          presets: {
+            duration: 400,
+            easing: 'linear'
+          }
+        })
+        animations.runAnimation(this.$refs.cdWrapper, 'move', done)
+      },
+      afterEnter() {
+        animations.unregisterAnimation('move')
+        this.$refs.cdWrapper.style.animation = ''
+      },
+      leave(el, done) {
+        this.$refs.cdWrapper.style.transition = 'all 0.4s'
+        const {
+          x,
+          y,
+          scale
+        } = this._getPostAndScale()
+        this.$refs.cdWrapper.style[transform] =
+          `translate3d(${x}px,${y}px,0) scale(${scale})`
+        this.$refs.cdWrapper.addEventListener('transitionend', done)
+      },
+      afterLeave() {
+        this.$refs.cdWrapper.style.transition = ''
+        this.$refs.cdWrapper.style[transform] = ''
+      },
+      _getPostAndScale() {
+        const targetWidth = 40
+        const paddingLeft = 40
+        const paddingBottom = 30
+        const paddingTop = 80
+        const width = window.innerWidth * 0.8
+        const scale = targetWidth / width
+        const x = -(window.innerWidth / 2 - paddingLeft)
+        const y = window.innerHeight - paddingTop - width / 2 - paddingBottom
+        return {
+          x,
+          y,
+          scale
+        }
+      },
+      back() {
+        this.setFullScreen(false)
+      },
+      ...mapMutations({
+        // 定义方法，用来保存各个参数的状态的函数
+        setFullScreen: 'SET_FULL_SCREEN',
+        setPlayingState: 'SET_PLAYING_STATE',
+        setCurrentIndex: 'SET_CURRENT_INDEX',
+        setPlayMode: 'SET_PLAY_MODE',
+        setPlayList: 'SET_PLAYLIST'
+      }),
+      open() {
+        this.setFullScreen(true)
+      }
     }
   }
-}
 </script>
 
 <style scoped lang="stylus" rel="stylesheet/stylus">
